@@ -554,25 +554,35 @@ function parseGoogle(html){
   const pm=new Map(all.map((e,i)=>[e,i]));
   const posOf=e=>pm.get(e)??-1;
 
-  // Todos los h1 con status y posicion
-  const h1s=[...doc.querySelectorAll('h1')].map(h=>{
-    const txt=h.textContent.replace(/\s+/g,' ').trim();
-    const ic=h.querySelector('i.status');
-    const st=!ic?'unknown':ic.className.includes('enabled')?'enabled':ic.className.includes('paused')?'paused':'removed';
-    const name=txt.replace(/^(?:Search\s+)?(?:Enabled|Paused|Removed)\s*/i,'').trim();
-    return{name,status:st,pos:posOf(h)};
-  }).filter(h=>h.name.length>2);
+  // ---- Identificar campanas usando el label "Campaign:" en el DOM ----
+  // Estructura: <p class="label">Campaign:</p><h1><i class="status ..."> nombre</h1>
+  const cH1=[];
+  doc.querySelectorAll('p.label').forEach(p=>{
+    if(!/^Campaign/i.test(p.textContent.trim())) return;
+    const h1=p.nextElementSibling;
+    if(!h1||h1.tagName!=='H1') return;
+    const ic=h1.querySelector('i.status');
+    if(!ic||!ic.className.includes('enabled')) return;
+    const name=h1.textContent.replace(/\s+/g,' ').trim()
+      .replace(/^(?:Search\s+)?(?:Enabled|Paused|Removed)\s*/i,'').trim();
+    if(name.length>1) cH1.push({name,pos:posOf(h1)});
+  });
 
-  // Campana: nombre estructurado con underscores (naming convention)
-  const isCampName=n=>{
-    if(n.length<10) return false;
-    if(n.includes('_GG_')||n.includes('_ADE_')||n.includes('_META_')) return true;
-    if(n.includes('_Compensar')||n.includes('Compensar')) return true;
-    return n.split('_').length>=3&&n.length>25;
-  };
+  // ---- Identificar grupos de anuncios usando el label "Ad Group" ----
+  // Estructura: <p class="label">Ad Group</p><h1 class="expand ..."><i class="status ..."> nombre</h1>
+  const aH1=[];
+  doc.querySelectorAll('p.label').forEach(p=>{
+    if(!/^Ad Group$/i.test(p.textContent.trim())) return;
+    const h1=p.nextElementSibling;
+    if(!h1||h1.tagName!=='H1') return;
+    const ic=h1.querySelector('i.status');
+    if(!ic||!ic.className.includes('enabled')) return;
+    const name=h1.textContent.replace(/\s+/g,' ').trim()
+      .replace(/^(?:Enabled|Paused|Removed)\s*/i,'').trim();
+    if(name.length>1) aH1.push({name,pos:posOf(h1)});
+  });
 
-  const cH1=h1s.filter(h=>isCampName(h.name)&&h.status==='enabled');
-  const aH1=h1s.filter(h=>!isCampName(h.name)&&h.name.length<80&&h.status==='enabled');
+  console.log('Campaigns found:',cH1.length,'Ad groups found:',aH1.length);
 
   // h1 mas cercano antes de una posicion
   const nearest=(lst,pos)=>{
@@ -582,19 +592,18 @@ function parseGoogle(html){
   };
 
   const ads=[];
-  for(const ta of doc.querySelectorAll('.textAd')){
+  // Buscar en todos los elementos que contengan anuncios RSA
+  // En algunos exports son .textAd, en otros pueden ser divs con Headline 1:
+  const adContainers=[...doc.querySelectorAll('.textAd')];
+
+  for(const ta of adContainers){
     const ap=posOf(ta);
     const camp=nearest(cH1,ap);
     if(!camp) continue;
 
-    // Status del anuncio
+    // Status del anuncio — solo enabled
     const stM=ta.textContent.match(/Status:\s*(Enabled|Paused|Removed)/i);
     if(stM&&stM[1].toLowerCase()!=='enabled') continue;
-
-    const ag=nearest(aH1,ap);
-
-    // URL destino
-    const lk=ta.querySelector('a[href]');
 
     // Titulares y descripciones
     const hl=[],ds=[];
@@ -605,7 +614,12 @@ function parseGoogle(html){
       m=t.match(/^Description (\d+):\s*(.+)$/);
       if(m){ds[parseInt(m[1])-1]=m[2].trim();}
     });
+    const hlf=hl.filter(Boolean),dsf=ds.filter(Boolean);
+    if(!hlf.length&&!dsf.length) continue; // excluir sin titulares ni descripciones
+
+    const ag=nearest(aH1,ap);
     const d1=ta.querySelector('.dline1');
+    const lk=ta.querySelector('a[href]');
 
     // Keywords del grupo
     const kw=[],sk=new Set();
@@ -623,9 +637,6 @@ function parseGoogle(html){
       }
       if(kw.length) break;
     }
-
-    const hlf=hl.filter(Boolean),dsf=ds.filter(Boolean);
-    if(!hlf.length&&!dsf.length) continue; // excluir anuncios sin titulares ni descripciones
 
     ads.push(applyH({
       medium:'Google',
@@ -729,17 +740,28 @@ async function fetchMetaAds(){
     const camps=await fetchPages(BASE+'/'+ac+'/campaigns?'+cp);
     if(!camps.length) throw new Error('Sin campa\u00f1as activas en esta cuenta');
     const cm=new Map(camps.map(c=>[c.id,c.name]));
-    const flds='id,name,campaign_id,preview_shareable_link,creative{title,body,image_url,thumbnail_url,asset_feed_spec{bodies{text},titles{text},descriptions{text},link_urls{website_url},videos{thumbnail_url},images{url}},object_story_spec{link_data{link,image_url,caption,description,message},video_data{image_url,call_to_action{value{link}}}}}';
-    const ap=new URLSearchParams({fields:flds,filtering:JSON.stringify([{field:'effective_status',operator:'IN',value:['ACTIVE']}]),limit:'500',access_token:tk});
-    const raw=await fetchPages(BASE+'/'+ac+'/ads?'+ap);
+    // Paso 1: traer IDs y nombres de anuncios (ligero)
+    const apBase=new URLSearchParams({fields:'id,name,campaign_id,preview_shareable_link',filtering:JSON.stringify([{field:'effective_status',operator:'IN',value:['ACTIVE']}]),limit:'200',access_token:tk});
+    const raw=await fetchPages(BASE+'/'+ac+'/ads?'+apBase);
+    // Paso 2: traer creativos en lotes de 50 para evitar payload too large
+    const flds='id,title,body,thumbnail_url,asset_feed_spec{bodies{text},titles{text},descriptions{text},link_urls{website_url},videos{thumbnail_url},images{url}},object_story_spec{link_data{link,caption,description,message},video_data{call_to_action{value{link}}}}';
+    const creativeMap=new Map();
+    for(let i=0;i<raw.length;i+=50){
+      const batch=raw.slice(i,i+50);
+      const ids=batch.map(a=>a.id).join(',');
+      const bRes=await fetch(BASE+'?ids='+ids+'&fields=creative{'+flds+'}&access_token='+tk);
+      const bData=await bRes.json();
+      if(bData.error) throw new Error('Meta ['+bData.error.code+']: '+bData.error.message);
+      Object.entries(bData).forEach(([id,d])=>creativeMap.set(id,d.creative||{}));
+    }
     S.metaAds=raw.map(ad=>{
-      const c=ad.creative||{},fd=c.asset_feed_spec||{},ld=c.object_story_spec?.link_data||{},vd=c.object_story_spec?.video_data||{};
+      const c=creativeMap.get(ad.id)||{},fd=c.asset_feed_spec||{},ld=c.object_story_spec?.link_data||{},vd=c.object_story_spec?.video_data||{};
       return applyH({medium:'Meta',campaign_name:cm.get(ad.campaign_id)||ad.campaign_id,ad_name:ad.name||'',
         headline:fd.titles?.[0]?.text||c.title||ld.caption||'',
         body_text:fd.bodies?.[0]?.text||c.body||ld.message||'',
         description:fd.descriptions?.[0]?.text||ld.description||'',
         destination_url:fd.link_urls?.[0]?.website_url||ld.link||vd.call_to_action?.value?.link||'',
-        preview_url:fd.videos?.[0]?.thumbnail_url||fd.images?.[0]?.url||ld.image_url||c.image_url||vd.image_url||c.thumbnail_url||'',
+        preview_url:fd.videos?.[0]?.thumbnail_url||fd.images?.[0]?.url||c.thumbnail_url||'',
         preview_shareable_link:ad.preview_shareable_link||'',
         nivel:'',modalidad:'',facultad:'',programa:'',sede:''
       },false);
