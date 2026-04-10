@@ -164,7 +164,7 @@ select.fsel option{background:var(--surface2)}
 .field-val a:hover{text-decoration:underline}
 .tags-row{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px}
 .tag{display:inline-flex;padding:2px 9px;border-radius:12px;font-size:10px;font-weight:600}
-.tag-pre{background:#fef9c3;color:#854d0e}.tag-pos{background:#fce7f3;color:#9d174d}.tag-tec{background:#ede9fe;color:#5b21b6}
+.tag-pre{background:#fef9c3;color:#854d0e}.tag-pos{background:#fce7f3;color:#9d174d}.tag-tec{background:#ede9fe;color:#5b21b6}.tag-neutral{background:var(--surface2);color:var(--muted);border:1px solid var(--border)}
 .tag-pres{background:#dcfce7;color:#166534}.tag-virt{background:#dbeafe;color:#1e40af}
 .card-footer{padding:8px 14px;border-top:1px solid var(--border);background:var(--surface2)}
 .camp-chip{font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;display:block;cursor:help}
@@ -302,10 +302,7 @@ select.fsel option{background:var(--surface2)}
   </div>
   <div class="fb-sep"></div>
   <span class="fb-label" id="filter-label">Filtrar:</span>
-  <select class="fsel" id="f-nivel" onchange="renderGrid()"><option value="">Nivel</option></select>
-  <select class="fsel" id="f-modalidad" onchange="renderGrid()"><option value="">Modalidad</option></select>
-  <select class="fsel" id="f-facultad" onchange="renderGrid()"><option value="">Facultad</option></select>
-  <select class="fsel" id="f-programa" onchange="renderGrid()"><option value="">Programa</option></select>
+  <div id="dyn-filters" style="display:contents"></div>
   <button class="clr-btn" onclick="clearFilters()">&#x2715; Limpiar</button>
   <div class="count-badge" id="count-badge">0 resultados</div>
 </div>
@@ -327,7 +324,7 @@ select.fsel option{background:var(--surface2)}
 const PRELOADED/*SNAPSHOT*/={"v":0,"m":[],"g":[],"h":[],"pw":""};
 // @@PRELOAD_END@@
 
-const S={metaAds:[],googleAds:[],homoRows:[],tab:'all'};
+const S={metaAds:[],googleAds:[],homoRows:[],homoKeys:[],tab:'all'};
 
 /* ---- INIT ---- */
 function init(){
@@ -336,6 +333,7 @@ function init(){
     S.metaAds=PRELOADED.m||[];
     S.googleAds=PRELOADED.g||[];
     S.homoRows=PRELOADED.h||[];
+    S.homoKeys=PRELOADED.hk||[];
     if(PRELOADED.pw) localStorage.setItem('pw',PRELOADED.pw);
     updatePills();
     if(S.metaAds.length){
@@ -349,6 +347,8 @@ function init(){
     if(S.homoRows.length){
       document.getElementById('homo-status').textContent=S.homoRows.length+' filas';
       document.getElementById('homo-status').className='cfg-status st-ok';
+      const campCol=Object.keys(S.homoRows[0]).find(k=>/campa|campaign/i.test(k))||'';
+      S.homoKeys=Object.keys(S.homoRows[0]).filter(k=>k!==campCol&&k.trim()!=='');
     }
     rebuildFilters();
   }
@@ -439,7 +439,7 @@ function loadSettings(){
 /* ---- SAVE VERSION ---- */
 function saveVersion(){
   if(!S.metaAds.length&&!S.googleAds.length){toast('No hay datos para guardar','error');return;}
-  const data={v:1,m:S.metaAds,g:S.googleAds,h:S.homoRows,pw:localStorage.getItem('pw')||PRELOADED.pw||''};
+  const data={v:1,m:S.metaAds,g:S.googleAds,h:S.homoRows,hk:S.homoKeys,pw:localStorage.getItem('pw')||PRELOADED.pw||''};
   let src='<!DOCTYPE html>\n'+document.documentElement.outerHTML;
   src=src.replace(/\/\/ @@PRELOAD_START@@[\s\S]*?\/\/ @@PRELOAD_END@@/,
     '// @@PRELOAD_START@@\nconst PRELOADED\/*SNAPSHOT*\/='+JSON.stringify(data)+';\n// @@PRELOAD_END@@');
@@ -503,11 +503,16 @@ function setHomoSt(n){
   document.getElementById('homo-zone').classList.add('has-file');
   const s=document.getElementById('homo-status');
   s.textContent=n+' filas';s.className='cfg-status st-ok';
+  // Detectar columnas dinamicas (todo excepto la columna Campaña)
+  if(S.homoRows.length){
+    const campCol=Object.keys(S.homoRows[0]).find(k=>/campa|campaign/i.test(k))||'';
+    S.homoKeys=Object.keys(S.homoRows[0]).filter(k=>k!==campCol&&k.trim()!=='');
+  }
   // Re-apply homologation to already-loaded ads
   if(S.metaAds.length) S.metaAds=S.metaAds.map(a=>applyH(a,false));
   if(S.googleAds.length) S.googleAds=S.googleAds.map(a=>applyH(a,true));
   rebuildFilters();renderGrid();
-  toast('Homologaci\u00f3n: '+n+' filas','success');
+  toast('Homologaci\u00f3n: '+n+' filas — '+S.homoKeys.length+' columnas','success');
 }
 function loadXLSX(cb){
   if(typeof XLSX!=='undefined'){cb();return;}
@@ -678,7 +683,23 @@ function lookupGoogle(name){
 }
 function applyH(ad,isG){
   const h=isG?lookupGoogle(ad.campaign_name):lookupMeta(ad.campaign_name);
-  if(h){ad.nivel=h['Nivel']||'';ad.modalidad=h['Modalidad']||'';ad.facultad=h['Facultad']||'';ad.programa=h['Programa general']||'';ad.sede=h['Sede']||'';}
+  // Limpiar campos previos
+  if(ad._homoFields) ad._homoFields.forEach(k=>delete ad[k]);
+  ad._homoFields=[];
+  if(h){
+    // Compatibilidad con campos legacy (para saveVersion y tarjetas)
+    ad.nivel=h['Nivel']||'';
+    ad.modalidad=h['Modalidad']||'';
+    ad.facultad=h['Facultad']||'';
+    ad.programa=h['Programa general']||h['Programa']||'';
+    ad.sede=h['Sede']||'';
+    // Copiar TODOS los campos del Excel dinamicamente
+    S.homoKeys.forEach(k=>{
+      const key='_h_'+k;
+      ad[key]=h[k]||'';
+      ad._homoFields.push(key);
+    });
+  }
   return ad;
 }
 
@@ -739,37 +760,76 @@ function setTab(t){
 }
 function clearFilters(){
   document.getElementById('search').value='';
-  ['f-nivel','f-modalidad','f-facultad','f-programa'].forEach(id=>document.getElementById(id).value='');
+  document.querySelectorAll('#dyn-filters select').forEach(s=>s.value='');
   renderGrid();
 }
 function rebuildFilters(){
   const all=[...S.metaAds,...S.googleAds];
-  const uniq=k=>[...new Set(all.map(a=>a[k]).filter(Boolean))].sort();
-  [{id:'f-nivel',k:'nivel',l:'Nivel'},{id:'f-modalidad',k:'modalidad',l:'Modalidad'},{id:'f-facultad',k:'facultad',l:'Facultad'},{id:'f-programa',k:'programa',l:'Programa'}].forEach(({id,k,l})=>{
-    const s=document.getElementById(id);const cur=s.value;
-    s.innerHTML='<option value="">'+l+'</option>';
-    uniq(k).forEach(v=>{const o=document.createElement('option');o.value=o.textContent=v;if(v===cur)o.selected=true;s.appendChild(o);});
+  const bar=document.getElementById('dyn-filters');
+  bar.innerHTML='';
+  if(!S.homoKeys.length) return;
+  // Para cada columna del Excel (excepto Campaña), generar un select dinamico
+  S.homoKeys.forEach(k=>{
+    const key='_h_'+k;
+    const vals=[...new Set(all.map(a=>a[key]).filter(Boolean))].sort();
+    if(!vals.length) return; // no hay datos para esta columna
+    const wrap=document.createElement('div');
+    wrap.style.display='contents';
+    const sel=document.createElement('select');
+    sel.className='fsel';
+    sel.id='df_'+key;
+    sel.setAttribute('data-key',key);
+    sel.innerHTML='<option value="">'+k+'</option>';
+    vals.forEach(v=>{const o=document.createElement('option');o.value=o.textContent=v;sel.appendChild(o);});
+    sel.onchange=renderGrid;
+    bar.appendChild(sel);
   });
 }
 function getFiltered(){
-  const q=document.getElementById('search').value.toLowerCase(),
-        nv=document.getElementById('f-nivel').value,
-        mo=document.getElementById('f-modalidad').value,
-        fa=document.getElementById('f-facultad').value,
-        pr=document.getElementById('f-programa').value,
-        tb=S.tab;
+  const q=document.getElementById('search').value.toLowerCase(),tb=S.tab;
+  // Recoger selects dinamicos activos
+  const dynFilters=[...document.querySelectorAll('#dyn-filters select')]
+    .map(s=>({key:s.getAttribute('data-key'),val:s.value}))
+    .filter(f=>f.val);
   return [...S.metaAds,...S.googleAds].filter(a=>{
     if(tb!=='all'&&a.medium!==tb) return false;
-    if(nv&&a.nivel!==nv) return false;
-    if(mo&&a.modalidad!==mo) return false;
-    if(fa&&a.facultad!==fa) return false;
-    if(pr&&a.programa!==pr) return false;
+    // Aplicar filtros dinamicos
+    for(const {key,val} of dynFilters){
+      if(a[key]!==val) return false;
+    }
     if(q){
       const kws=(a.keywords||[]).map(k=>k.text).join(' ');
-      if(![a.campaign_name,a.ad_name,a.headline,a.body_text,a.programa,a.facultad,...(a.headlines||[]),kws].join(' ').toLowerCase().includes(q)) return false;
+      const dynVals=(a._homoFields||[]).map(k=>a[k]||'').join(' ');
+      if(![a.campaign_name,a.ad_name,a.headline,a.body_text,dynVals,...(a.headlines||[]),kws].join(' ').toLowerCase().includes(q)) return false;
     }
     return true;
   });
+}
+
+/* ---- DYNAMIC HOMO TAGS ---- */
+function dynTagsHtml(ad){
+  if(!S.homoKeys.length){
+    return '<div class="tags-row">'+lvT(ad.nivel)+moT(ad.modalidad)+'</div>'
+      +(ad.facultad?'<div class="field-row" style="margin-top:6px"><div class="field-lbl">Facultad</div><div class="field-val">'+esc(ad.facultad)+'</div></div>':'');
+  }
+  let tagsHtml='<div class="tags-row" style="flex-wrap:wrap;gap:4px;margin-top:6px">';
+  let fieldsHtml='';
+  S.homoKeys.forEach(k=>{
+    const v=ad['_h_'+k];
+    if(!v) return;
+    // Colores por tipo de columna
+    let cls='tag-neutral';
+    if(k==='Nivel'){cls=v==='Pregrado'?'tag-pre':v==='Posgrado'?'tag-pos':'tag-tec';}
+    else if(k==='Modalidad'){cls=v==='Presencial'?'tag-pres':v==='Virtual'?'tag-virt':'tag-neutral';}
+    // Valor largo o columna de programa/facultad -> field-row, corto -> tag
+    if(v.length>30||/programa|facultad|product|categor/i.test(k)){
+      fieldsHtml+='<div class="field-row" style="margin-top:4px"><div class="field-lbl">'+esc(k)+'</div><div class="field-val">'+esc(v)+'</div></div>';
+    } else {
+      tagsHtml+='<span class="tag '+cls+'" title="'+esc(k)+'">'+esc(v)+'</span>';
+    }
+  });
+  tagsHtml+='</div>';
+  return tagsHtml+fieldsHtml;
 }
 
 /* ---- CARD TAGS ---- */
@@ -790,8 +850,7 @@ function rMeta(ad){
     +(ad.headline?'<div class="field-row"><div class="field-lbl">Titular</div><div class="field-val bold">'+esc(ad.headline)+'</div></div>':'')
     +(ad.body_text?'<div class="field-row"><div class="field-lbl">Cuerpo</div><div class="field-val">'+esc(ad.body_text)+'</div></div>':'')
     +(ad.description?'<div class="field-row"><div class="field-lbl">Descripci\u00f3n</div><div class="field-val">'+esc(ad.description)+'</div></div>':'')
-    +'<div class="tags-row">'+lvT(ad.nivel)+moT(ad.modalidad)+'</div>'
-    +(ad.facultad?'<div class="field-row" style="margin-top:6px"><div class="field-lbl">Facultad</div><div class="field-val">'+esc(ad.facultad)+'</div></div>':'')
+    +dynTagsHtml(ad)
     +(ad.destination_url?'<div class="field-row"><div class="field-lbl">URL de destino</div><div class="field-val"><a href="'+esc(ad.destination_url)+'" target="_blank">'+esc(ad.destination_url)+'</a></div></div>':'')
     +(ad.preview_shareable_link?'<div class="field-row"><div class="field-lbl">Preview</div><div class="field-val"><a href="'+esc(ad.preview_shareable_link)+'" target="_blank">Ver en Meta \u2197</a></div></div>':'')
     +'</div>'
