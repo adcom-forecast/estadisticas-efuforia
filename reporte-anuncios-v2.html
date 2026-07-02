@@ -234,8 +234,9 @@ select.fsel:focus{border-color:var(--orange)}
       <div class="cfg-body">
         <div class="fld"><label>Advertiser ID (cuenta publicitaria)</label><input type="text" id="tiktok-account" placeholder="6870xxxxxxxxxxxxxx" oninput="saveSettings()"></div>
         <div class="fld"><label>Access Token</label><input type="text" id="tiktok-token" class="mono" placeholder="ac299aaae2f93229ba61dc2de81fa73001ff8629" oninput="saveSettings()"></div>
+        <div class="fld"><label>Proxy URL (Apps Script)</label><input type="text" id="tiktok-proxy" class="mono" placeholder="https://script.google.com/macros/s/AKfycb.../exec" oninput="saveSettings()"></div>
         <button class="cfg-btn btn-tiktok" id="tiktok-btn" onclick="fetchTikTokAds()">&#9654; Conectar y cargar anuncios</button>
-        <p style="font-size:10px;color:var(--muted);line-height:1.5">Nota: la API de TikTok normalmente bloquea llamadas directas desde el navegador (CORS). Si falla, necesitaremos un proxy (ej. Apps Script).</p>
+        <p style="font-size:10px;color:var(--muted);line-height:1.5">TikTok bloquea las llamadas directas desde el navegador (CORS). Despliega el script de proxy en Apps Script y pega aquí la URL /exec.</p>
       </div>
     </div>
 
@@ -410,6 +411,7 @@ function saveSettings(){
   localStorage.setItem('mv',document.getElementById('meta-version').value.trim()||'v21.0');
   localStorage.setItem('tt',document.getElementById('tiktok-token').value.trim());
   localStorage.setItem('ta',document.getElementById('tiktok-account').value.trim());
+  localStorage.setItem('tp',document.getElementById('tiktok-proxy').value.trim());
 }
 function loadSettings(){
   document.getElementById('meta-token').value=localStorage.getItem('mt')||'';
@@ -417,6 +419,7 @@ function loadSettings(){
   document.getElementById('meta-version').value=localStorage.getItem('mv')||'v21.0';
   document.getElementById('tiktok-token').value=localStorage.getItem('tt')||'';
   document.getElementById('tiktok-account').value=localStorage.getItem('ta')||'';
+  document.getElementById('tiktok-proxy').value=localStorage.getItem('tp')||'';
   const cn=localStorage.getItem('client-name')||'';
   document.getElementById('cfg-client-name').value=cn;
   if(cn) setClientNameDisplay(cn);
@@ -782,10 +785,18 @@ async function fetchMetaAds(){
 }
 
 /* ---- TIKTOK API ---- */
-async function fetchTikTokPages(url,tk){
+function tiktokFetch(url,tk,proxyUrl){
+  if(proxyUrl){
+    return fetch(proxyUrl+'?token='+encodeURIComponent(tk)+'&url='+encodeURIComponent(url));
+  }
+  return fetch(url,{headers:{'Access-Token':tk}});
+}
+
+async function fetchTikTokPages(url,tk,proxyUrl){
   const r=[];let page=1;
   while(true){
-    const res=await fetch(url+'&page='+page+'&page_size=100',{headers:{'Access-Token':tk}});
+    const pagedUrl=url+'&page='+page+'&page_size=100';
+    const res=await tiktokFetch(pagedUrl,tk,proxyUrl);
     const d=await res.json();
     if(d.code!==0) throw new Error('TikTok ['+d.code+']: '+(d.message||'error desconocido'));
     const list=d.data?.list||[];
@@ -800,6 +811,7 @@ async function fetchTikTokPages(url,tk){
 async function fetchTikTokAds(){
   const tk=document.getElementById('tiktok-token').value.trim();
   const ac=document.getElementById('tiktok-account').value.trim();
+  const proxyUrl=document.getElementById('tiktok-proxy').value.trim();
   saveSettings();
   if(!tk||!ac){toast('Ingresa Advertiser ID y Access Token','error');return;}
   const BASE='https://business-api.tiktok.com/open_api/v1.3';
@@ -810,7 +822,7 @@ async function fetchTikTokAds(){
     const fields=encodeURIComponent(JSON.stringify(['ad_id','ad_name','campaign_id','campaign_name','ad_text','title','call_to_action','image_ids','video_id','landing_page_url','operation_status']));
     const filtering=encodeURIComponent(JSON.stringify({primary_status:'STATUS_DELIVERY_OK'}));
     const url=BASE+'/ad/get/?advertiser_id='+encodeURIComponent(ac)+'&fields='+fields+'&filtering='+filtering;
-    const raw=await fetchTikTokPages(url,tk);
+    const raw=await fetchTikTokPages(url,tk,proxyUrl);
     if(!raw.length) throw new Error('Sin anuncios activos en esta cuenta');
 
     // Resolver preview de imagen/video en lotes
@@ -819,13 +831,15 @@ async function fetchTikTokAds(){
     const imgMap=new Map(),vidMap=new Map();
     for(let i=0;i<imgIds.length;i+=20){
       const batch=imgIds.slice(i,i+20);
-      const r=await fetch(BASE+'/file/image/ad/info/?advertiser_id='+encodeURIComponent(ac)+'&image_ids='+encodeURIComponent(JSON.stringify(batch)),{headers:{'Access-Token':tk}});
+      const iu=BASE+'/file/image/ad/info/?advertiser_id='+encodeURIComponent(ac)+'&image_ids='+encodeURIComponent(JSON.stringify(batch));
+      const r=await tiktokFetch(iu,tk,proxyUrl);
       const d=await r.json();
       if(d.code===0)(d.data?.list||[]).forEach(im=>imgMap.set(im.image_id,im.image_url));
     }
     for(let i=0;i<vidIds.length;i+=20){
       const batch=vidIds.slice(i,i+20);
-      const r=await fetch(BASE+'/file/video/ad/info/?advertiser_id='+encodeURIComponent(ac)+'&video_ids='+encodeURIComponent(JSON.stringify(batch)),{headers:{'Access-Token':tk}});
+      const vu=BASE+'/file/video/ad/info/?advertiser_id='+encodeURIComponent(ac)+'&video_ids='+encodeURIComponent(JSON.stringify(batch));
+      const r=await tiktokFetch(vu,tk,proxyUrl);
       const d=await r.json();
       if(d.code===0)(d.data?.list||[]).forEach(v=>vidMap.set(v.video_id,v.video_cover_url||v.poster_url||''));
     }
@@ -850,7 +864,7 @@ async function fetchTikTokAds(){
     document.getElementById('tiktok-status').textContent='Error';
     document.getElementById('tiktok-status').className='cfg-status st-err';
     const isCors=e instanceof TypeError;
-    toast(isCors?'TikTok bloqueó la llamada directa (CORS) — necesitamos un proxy':e.message,'error');
+    toast(isCors&&!proxyUrl?'TikTok bloqueó la llamada directa (CORS) — configura el Proxy URL':e.message,'error');
     console.error(e);
   }
   finally{btn.disabled=false;btn.textContent='▶ Conectar y cargar anuncios';}
