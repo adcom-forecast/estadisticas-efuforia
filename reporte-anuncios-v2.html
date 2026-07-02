@@ -798,7 +798,11 @@ async function fetchTikTokPages(url,tk,proxyUrl){
     const pagedUrl=url+'&page='+page+'&page_size=100';
     const res=await tiktokFetch(pagedUrl,tk,proxyUrl);
     const d=await res.json();
-    if(d.code!==0) throw new Error('TikTok ['+d.code+']: '+(d.message||'error desconocido'));
+    if(d.code!==0){
+      let msg=d.message||'error desconocido';
+      if(msg.length>200) msg=msg.slice(0,200)+'…';
+      throw new Error('TikTok ['+d.code+']: '+msg);
+    }
     const list=d.data?.list||[];
     r.push(...list);
     const pi=d.data?.page_info;
@@ -819,9 +823,8 @@ async function fetchTikTokAds(){
   btn.disabled=true;btn.textContent='⏳ Cargando...';
   st.textContent='Cargando...';st.className='cfg-status st-load';
   try{
-    const fields=encodeURIComponent(JSON.stringify(['ad_id','ad_name','campaign_id','campaign_name','ad_text','title','call_to_action','image_ids','video_id','landing_page_url','operation_status']));
     const filtering=encodeURIComponent(JSON.stringify({primary_status:'STATUS_DELIVERY_OK'}));
-    const url=BASE+'/ad/get/?advertiser_id='+encodeURIComponent(ac)+'&fields='+fields+'&filtering='+filtering;
+    const url=BASE+'/ad/get/?advertiser_id='+encodeURIComponent(ac)+'&filtering='+filtering;
     const raw=await fetchTikTokPages(url,tk,proxyUrl);
     if(!raw.length) throw new Error('Sin anuncios activos en esta cuenta');
 
@@ -848,7 +851,7 @@ async function fetchTikTokAds(){
       medium:'TikTok',
       campaign_name:ad.campaign_name||ad.campaign_id||'',
       ad_name:ad.ad_name||'',
-      headline:ad.title||'',
+      headline:ad.identity_name||ad.display_name||'',
       body_text:ad.ad_text||'',
       description:'',
       destination_url:ad.landing_page_url||'',
