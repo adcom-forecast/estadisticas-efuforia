@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tablero de Implementación — Compensar</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f0f2f5;--surface:#ffffff;--surface2:#f8f9fa;--border:#e4e6eb;
+  --text:#1c1e21;--muted:#65676b;--orange:#ff6500;--orange-dim:rgba(255,101,0,.10);
+  --meta:#1877F2;--google:#4285F4;--tiktok:#000000;--tiktok2:#25F4EE;--green:#16a34a;--yellow:#d97706;--red:#dc2626;
+  --header:#0b0d14;--radius:10px;--shadow:0 2px 8px rgba(0,0,0,.10)
+}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.pw-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:900;align-items:center;justify-content:center}
+.pw-overlay.open{display:flex}
+.pw-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:36px 40px;width:360px;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,.6)}
+.pw-icon{font-size:36px;margin-bottom:16px}
+.pw-box h2{font-size:18px;font-weight:700;margin-bottom:8px}
+.pw-box p{font-size:13px;color:var(--muted);margin-bottom:20px}
+.pw-inp{width:100%;background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;color:var(--text);padding:10px 14px;font-size:14px;outline:none;margin-bottom:12px}
+.pw-inp:focus{border-color:var(--orange)}
+.pw-btn{width:100%;padding:10px;background:var(--orange);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer}
+.pw-btn:hover{background:#e55a00}
+.pw-err{font-size:12px;color:var(--red);margin-top:10px;min-height:18px}
+.pw-skip{font-size:11px;color:var(--muted);margin-top:12px;cursor:pointer;text-decoration:underline;display:none}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1c1e2e;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;z-index:999;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;border:1px solid var(--border)}
+.toast.show{opacity:1}.toast.error{background:#3d1515;border-color:var(--red)}.toast.success{background:#0f2d1c;border-color:var(--green)}
+.settings-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400}
+.settings-overlay.open{display:block}
+.settings-drawer{position:fixed;top:0;right:-500px;width:480px;height:100vh;height:100dvh;background:var(--surface);z-index:500;display:flex;flex-direction:column;box-shadow:-4px 0 32px rgba(0,0,0,.5);transition:right .3s ease;border-left:1px solid var(--border)}
+.settings-drawer.open{right:0}
+.drawer-head{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.drawer-head h2{font-size:16px;font-weight:700}
+.drawer-close{background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1;padding:0}
+.drawer-close:hover{color:var(--text)}
+.drawer-body{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:20px 24px;display:flex;flex-direction:column;gap:16px;-webkit-overflow-scrolling:touch}
+.cfg-section{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.cfg-head{padding:12px 16px;display:flex;align-items:center;gap:10px;background:var(--surface2);border-bottom:1px solid var(--border)}
+.cfg-icon{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.icon-meta{background:rgba(79,142,247,.15)}.icon-google{background:rgba(95,168,245,.15)}.icon-tiktok{background:rgba(37,244,238,.15)}.icon-homo{background:rgba(251,191,36,.12)}.icon-lock{background:rgba(255,101,0,.15)}
+.cfg-head h3{font-size:13px;font-weight:700}
+.cfg-status{margin-left:auto;font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;white-space:nowrap}
+.st-ok{background:#dcfce7;color:#166534}.st-empty{background:var(--surface2);color:var(--muted);border:1px solid var(--border)}.st-err{background:#fee2e2;color:#991b1b}.st-load{background:#dbeafe;color:#1e40af}
+.cfg-body{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.fld{display:flex;flex-direction:column;gap:4px}
+.fld label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.fld input{background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--text);outline:none;width:100%;transition:border-color .2s}
+.fld input:focus{border-color:var(--orange)}
+.fld input.mono{font-family:monospace;font-size:11px}
+.upload-zone{border:2px dashed var(--border);border-radius:8px;padding:16px;text-align:center;cursor:pointer;transition:all .2s;background:var(--surface2)}
+.upload-zone:hover{border-color:var(--orange);background:rgba(255,101,0,.05)}
+.upload-zone.has-file{border-color:var(--green);background:rgba(34,197,94,.05)}
+.upload-zone input{display:none}
+.up-icon{font-size:24px;margin-bottom:6px}
+.upload-zone p{font-size:12px;color:var(--muted)}
+.up-note{font-size:10px;color:#555;margin-top:3px}
+.file-name{font-size:11px;font-weight:600;color:var(--green);margin-top:5px}
+.cfg-btn{width:100%;padding:10px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px}
+.cfg-btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-meta{background:rgba(79,142,247,.2);color:#93c5fd;border:1px solid rgba(79,142,247,.3)}
+.btn-meta:not(:disabled):hover{background:rgba(79,142,247,.35)}
+.btn-tiktok{background:rgba(37,244,238,.15);color:#0f172a;border:1px solid rgba(37,244,238,.4)}
+.btn-tiktok:not(:disabled):hover{background:rgba(37,244,238,.3)}
+.drawer-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:10px}
+.btn-apply{flex:1;padding:12px;background:var(--orange);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn-apply:hover{background:#e55a00}
+header{background:var(--header);color:var(--text);padding:0 24px;height:56px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:300;border-bottom:1px solid var(--border)}
+.logo-badge{width:34px;height:34px;background:var(--orange);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:#fff;flex-shrink:0}
+.hd-title{font-size:15px;font-weight:700;color:#ffffff}
+.hd-sub{font-size:11px;color:rgba(255,255,255,.55)}
+.hd-space{flex:1}
+.hd-search{position:relative}
+.hd-search input{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#ffffff;padding:7px 34px 7px 12px;font-size:13px;width:220px;outline:none}
+.hd-search input::placeholder{color:rgba(255,255,255,.35)}
+.hd-search input:focus{border-color:var(--orange)}
+.hd-search svg{position:absolute;right:10px;top:50%;transform:translateY(-50%);opacity:.4;pointer-events:none}
+.hd-pill{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:20px;padding:4px 12px;font-size:11px;font-weight:600;white-space:nowrap;color:rgba(255,255,255,.7)}
+.hd-time{font-size:11px;color:rgba(255,255,255,.45);white-space:nowrap}
+.hd-btn{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:rgba(255,255,255,.85);padding:7px 12px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .2s;white-space:nowrap}
+.hd-btn:hover{background:rgba(255,255,255,.1)}
+.hd-btn-orange{background:var(--orange);border-color:var(--orange);color:#fff}
+.hd-btn-orange:hover{background:#e55a00;border-color:#e55a00}
+.filterbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-height:50px;position:sticky;top:56px;z-index:200}
+.fb-sep{width:1px;height:22px;background:var(--border);margin:0 4px;flex-shrink:0}
+.fb-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap}
+select.fsel{padding:5px 10px;border:1.5px solid var(--border);border-radius:20px;font-size:12px;color:var(--text);background:var(--surface2);outline:none;cursor:pointer}
+select.fsel:focus{border-color:var(--orange)}
+.mtabs{display:flex;gap:3px}
+.mtab{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;border:1.5px solid transparent;display:flex;align-items:center;gap:5px;transition:all .15s;white-space:nowrap}
+.mtab:hover{background:var(--surface2)}
+.mtab.active{border-color:var(--orange);color:var(--orange);background:var(--orange-dim)}
+.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.dot-all{background:linear-gradient(135deg,var(--meta) 33%,var(--google) 33% 66%,var(--tiktok) 66%)}
+.dot-meta{background:var(--meta)}.dot-google{background:var(--google)}.dot-tiktok{background:var(--tiktok)}
+.mtab .cnt{background:var(--surface2);border-radius:10px;padding:1px 6px;font-size:10px;font-weight:700;color:var(--muted)}
+.count-badge{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:3px 10px;font-size:12px;color:var(--muted);margin-left:auto;white-space:nowrap}
+.clr-btn{padding:5px 12px;border:1.5px solid var(--border);border-radius:20px;background:transparent;font-size:12px;color:var(--muted);cursor:pointer}
+.clr-btn:hover{border-color:var(--orange);color:var(--orange)}
+.content{padding:20px 24px}
+.ads-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px}
+.empty{text-align:center;padding:60px 20px;color:var(--muted);grid-column:1/-1}
+.empty-icon{font-size:48px;opacity:.35;margin-bottom:12px}
+.ad-card{background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;box-shadow:var(--shadow);transition:box-shadow .2s,transform .15s}
+.ad-card:hover{box-shadow:0 6px 24px rgba(0,0,0,.15);transform:translateY(-2px);border-color:#ccc}
+.card-header{padding:10px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);background:var(--surface2)}
+.card-medium{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.badge-meta{color:var(--meta)}.badge-google{color:var(--google)}.badge-tiktok{color:#000}
+.medium-icon{width:15px;height:15px;flex-shrink:0}
+.card-program{font-size:10px;color:var(--muted);max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.preview-box{width:100%;aspect-ratio:1.91/1;background:var(--surface2);overflow:hidden;display:flex;align-items:center;justify-content:center;position:relative;border-bottom:1px solid var(--border)}
+.preview-box img{width:100%;height:100%;object-fit:cover}
+.preview-placeholder{display:flex;flex-direction:column;align-items:center;gap:6px}
+.preview-placeholder svg{opacity:.15}
+.preview-placeholder span{font-size:10px;color:var(--muted)}
+.prev-badge{position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,.75);color:#fff;font-size:10px;padding:3px 9px;border-radius:4px;text-decoration:none;border:1px solid rgba(255,255,255,.1)}
+.prev-badge:hover{background:rgba(0,0,0,.9)}
+.rsa-preview{padding:12px 14px;border-bottom:1px solid var(--border);background:var(--surface2)}
+.rsa-dom-row{display:flex;align-items:center;gap:5px;margin-bottom:4px}
+.rsa-ad{background:var(--surface);border:1px solid var(--border);border-radius:3px;font-size:9px;color:var(--muted);padding:1px 4px;font-weight:700}
+.rsa-dom{font-size:11px;color:var(--text)}
+.rsa-title{font-size:13px;color:#1a0dab;font-weight:500;line-height:1.4;margin-bottom:5px}
+.rsa-body{font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:8px}
+.hl-toggle{font-size:11px;color:var(--google);background:none;border:none;cursor:pointer;padding:0;font-weight:600;text-align:left}
+.hl-toggle:hover{text-decoration:underline}
+.hl-expanded{margin-top:8px;padding-top:8px;border-top:1px solid var(--border);display:none}
+.hl-expanded.open{display:block}
+.hl-sec-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px}
+.hl-list{display:flex;flex-direction:column;gap:3px;margin-bottom:6px}
+.hl-item{font-size:11px;color:#1a0dab;display:flex;align-items:baseline;gap:5px}
+.hl-num{font-size:9px;color:var(--muted);min-width:18px;flex-shrink:0}
+.desc-item{font-size:11px;color:var(--muted);display:flex;align-items:baseline;gap:5px}
+.kw-section{padding:10px 14px;border-bottom:1px solid var(--border)}
+.kw-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.kw-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.kw-counts{font-size:10px;color:var(--muted);display:flex;gap:8px}
+.kw-cnt{display:flex;align-items:center;gap:3px}
+.kw-list{display:flex;flex-direction:column;gap:3px}
+.kw-row{display:flex;align-items:center;gap:7px;font-size:11px}
+.kw-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;display:inline-block}
+.kw-dot.enabled{background:#34a853}.kw-dot.paused{background:#fbbc04}
+.kw-text{flex:1;color:var(--text)}.kw-match{font-size:9px;color:var(--muted);background:var(--surface2);padding:1px 5px;border-radius:3px;white-space:nowrap}
+.card-body{padding:12px 14px}
+.field-row{margin-bottom:8px}
+.field-lbl{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:2px}
+.field-val{font-size:12px;color:var(--text);line-height:1.5}
+.field-val.bold{font-size:13px;font-weight:600;color:#111}
+.field-val a{color:var(--orange);text-decoration:none;font-size:11px;word-break:break-all}
+.field-val a:hover{text-decoration:underline}
+.tags-row{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px}
+.tag{display:inline-flex;padding:2px 9px;border-radius:12px;font-size:10px;font-weight:600}
+.tag-pre{background:#fef9c3;color:#854d0e}.tag-pos{background:#fce7f3;color:#9d174d}.tag-tec{background:#ede9fe;color:#5b21b6}.tag-neutral{background:var(--surface2);color:var(--muted);border:1px solid var(--border)}
+.tag-pres{background:#dcfce7;color:#166534}.tag-virt{background:#dbeafe;color:#1e40af}
+.card-footer{padding:8px 14px;border-top:1px solid var(--border);background:var(--surface2)}
+.camp-chip{font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;display:block;cursor:help}
+.src-badge{display:inline-flex;align-items:center;gap:4px;font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px;margin-top:6px}
+.src-verified{background:#dcfce7;color:#166534}
+.src-fallback{background:#fef3c7;color:#92400e}
+@media(max-width:640px){.ads-grid{grid-template-columns:1fr}.settings-drawer{width:100%;right:-100%}.filterbar{padding:8px 12px}.content{padding:12px}.hd-search input{width:140px}}
+</style>
+</head>
+<body>
+
+<div class="pw-overlay" id="pw-modal">
+  <div class="pw-box">
+    <div class="pw-icon">&#128274;</div>
+    <h2>Acceso restringido</h2>
+    <p>Ingresa la contraseña de administrador para configurar el tablero</p>
+    <input type="password" class="pw-inp" id="pw-input" placeholder="Contraseña" onkeydown="if(event.key==='Enter')checkPw()">
+    <button class="pw-btn" onclick="checkPw()">Entrar</button>
+    <div class="pw-err" id="pw-err"></div>
+    <div class="pw-skip" id="pw-skip" onclick="hidePwModal()">Cancelar</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="settings-overlay" id="overlay" onclick="closeDrawer()"></div>
+
+<div class="settings-drawer" id="drawer">
+  <div class="drawer-head">
+    <h2>&#9881; Configuración del tablero</h2>
+    <button class="drawer-close" onclick="closeDrawer()">&#x2715;</button>
+  </div>
+  <div class="drawer-body">
+    <div class="cfg-section">
+      <div class="cfg-head">
+        <div class="cfg-icon" style="background:rgba(255,101,0,.15)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+        <h3>Cliente</h3>
+      </div>
+      <div class="cfg-body">
+        <div class="fld">
+          <label>Nombre del cliente</label>
+          <input type="text" id="cfg-client-name" placeholder="Ej: EIA, Compensar, Católica..." oninput="updateClientName()">
+        </div>
+      </div>
+    </div>
+
+    <div class="cfg-section">
+      <div class="cfg-head">
+        <div class="cfg-icon icon-meta"><svg width="16" height="16" viewBox="0 0 24 24" fill="#4f8ef7"><path d="M12 2.04C6.5 2.04 2 6.53 2 12.06C2 17.06 5.66 21.21 10.44 21.96V14.96H7.9V12.06H10.44V9.85C10.44 7.34 11.93 5.96 14.22 5.96C15.31 5.96 16.45 6.15 16.45 6.15V8.62H15.19C13.95 8.62 13.56 10.18 13.56 10.18V12.06H16.34L15.89 14.96H13.56V21.96A10 10 0 0 0 22 12.06C22 6.53 17.5 2.04 12 2.04Z"/></svg></div>
+        <h3>Meta Ads</h3>
+        <span class="cfg-status st-empty" id="meta-status">Sin configurar</span>
+      </div>
+      <div class="cfg-body">
+        <div class="fld"><label>ID de la cuenta publicitaria</label><input type="text" id="meta-account" placeholder="act_566895485971499" oninput="saveSettings()"></div>
+        <div class="fld"><label>Token de acceso</label><input type="text" id="meta-token" class="mono" placeholder="EAAQHp..." oninput="saveSettings()"></div>
+        <div class="fld"><label>Versión de API</label><input type="text" id="meta-version" placeholder="v21.0" oninput="saveSettings()"></div>
+        <button class="cfg-btn btn-meta" id="meta-btn" onclick="fetchMetaAds()">&#9654; Conectar y cargar anuncios</button>
+        <p style="font-size:10px;color:var(--muted);line-height:1.5">El texto de cada anuncio se trae priorizando el post real publicado (effective_object_story_id). Requiere que el token tenga permiso pages_read_engagement sobre la Página además de ads_read.</p>
+      </div>
+    </div>
+
+    <div class="cfg-section">
+      <div class="cfg-head">
+        <div class="cfg-icon icon-google"><svg width="16" height="16" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.47 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg></div>
+        <h3>Google Ads</h3>
+        <span class="cfg-status st-empty" id="google-status">Sin archivo</span>
+      </div>
+      <div class="cfg-body">
+        <div class="upload-zone" id="google-zone" onclick="document.getElementById('google-file').click()">
+          <input type="file" id="google-file" accept=".html,.htm" onchange="handleGoogleFile(this)">
+          <div class="up-icon">&#128196;</div>
+          <p>Haz clic para subir el HTML exportado de Google Ads</p>
+          <p class="up-note">Archivo .html generado desde Google Ads UI</p>
+          <div class="file-name" id="google-filename"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cfg-section">
+      <div class="cfg-head">
+        <div class="cfg-icon icon-tiktok"><svg width="16" height="16" viewBox="0 0 24 24" fill="#000"><path d="M16.6 5.82s.51.5 0 0A4.278 4.278 0 0 1 15.54 3h-3.09v12.4a2.592 2.592 0 0 1-2.59 2.5c-1.42 0-2.6-1.16-2.6-2.6c0-1.72 1.66-3.01 3.37-2.48V9.66c-3.45-.46-6.47 2.22-6.47 5.64c0 3.33 2.76 5.7 5.69 5.7c3.14 0 5.69-2.55 5.69-5.7V9.01a7.35 7.35 0 0 0 4.3 1.38V7.3s-1.88.09-3.24-1.48z"/></svg></div>
+        <h3>TikTok Ads</h3>
+        <span class="cfg-status st-empty" id="tiktok-status">Sin configurar</span>
+      </div>
+      <div class="cfg-body">
+        <div class="fld"><label>Advertiser ID (cuenta publicitaria)</label><input type="text" id="tiktok-account" placeholder="6870xxxxxxxxxxxxxx" oninput="saveSettings()"></div>
+        <div class="fld"><label>Access Token</label><input type="text" id="tiktok-token" class="mono" placeholder="ac299aaae2f93229ba61dc2de81fa73001ff8629" oninput="saveSettings()"></div>
+        <div class="fld"><label>Proxy URL (Apps Script)</label><input type="text" id="tiktok-proxy" class="mono" placeholder="https://script.google.com/macros/s/AKfycb.../exec" oninput="saveSettings()"></div>
+        <button class="cfg-btn btn-tiktok" id="tiktok-btn" onclick="fetchTikTokAds()">&#9654; Conectar y cargar anuncios</button>
+        <p style="font-size:10px;color:var(--muted);line-height:1.5">TikTok bloquea las llamadas directas desde el navegador (CORS). Despliega el script de proxy en Apps Script y pega aquí la URL /exec.</p>
+      </div>
+    </div>
+
+    <div class="cfg-section">
+      <div class="cfg-head">
+        <div class="cfg-icon icon-homo"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg></div>
+        <h3>Homologación</h3>
+        <span class="cfg-status st-empty" id="homo-status">Sin archivo</span>
+      </div>
+      <div class="cfg-body">
+        <div class="upload-zone" id="homo-zone" onclick="document.getElementById('homo-file').click()">
+          <input type="file" id="homo-file" accept=".csv,.xlsx,.xls" onchange="handleHomoFile(this)">
+          <div class="up-icon">&#128202;</div>
+          <p>Haz clic para subir el archivo de homologación</p>
+          <p class="up-note">CSV (separado por ;) o Excel (.xlsx) — cualquier estructura de columnas</p>
+          <div class="file-name" id="homo-filename"></div>
+        </div>
+        <p id="homo-cols-info" style="font-size:11px;color:var(--muted);line-height:1.6;display:none"></p>
+      </div>
+    </div>
+
+    <div class="cfg-section">
+      <div class="cfg-head">
+        <div class="cfg-icon icon-lock">&#128274;</div>
+        <h3>Contraseña de administrador</h3>
+        <span class="cfg-status" id="lock-status" style="background:var(--surface);color:var(--muted);border:1px solid var(--border)">Sin contraseña</span>
+      </div>
+      <div class="cfg-body">
+        <div class="fld"><label>Nueva contraseña</label><input type="password" id="pw-new" placeholder="Mínimo 4 caracteres"></div>
+        <div class="fld"><label>Confirmar contraseña</label><input type="password" id="pw-confirm" placeholder="Repite la contraseña"></div>
+        <button class="cfg-btn" style="background:rgba(255,101,0,.15);color:var(--orange);border:1px solid rgba(255,101,0,.3)" onclick="setPw()">&#128275; Guardar contraseña</button>
+        <button class="cfg-btn" style="background:var(--surface2);color:var(--muted);border:1px solid var(--border);margin-top:4px" onclick="clearPw()">Quitar contraseña</button>
+      </div>
+    </div>
+  </div>
+  <div class="drawer-footer">
+    <button class="btn-apply" onclick="actualizarTodo()">&#8635; Aplicar y actualizar</button>
+  </div>
+</div>
+
+<header>
+  <div class="logo-badge">A</div>
+  <div>
+    <div class="hd-title">Tablero de Implementación</div>
+    <div class="hd-sub" id="hd-sub">ADCOM · 2026</div>
+  </div>
+  <div class="hd-space"></div>
+  <div class="hd-search">
+    <input type="text" id="search" placeholder="Buscar campaña, programa, keyword..." oninput="renderGrid()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+  </div>
+  <div class="hd-pill" id="meta-pill">Meta: 0</div>
+  <div class="hd-pill" id="google-pill">Google: 0</div>
+  <div class="hd-pill" id="tiktok-pill">TikTok: 0</div>
+  <span class="hd-time" id="updated-time"></span>
+  <button class="hd-btn" onclick="saveVersion()" title="Guardar versión estática para compartir">&#128190; Guardar versión</button>
+  <button class="hd-btn hd-btn-orange" onclick="tryOpenDrawer()">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    Configuración
+  </button>
+</header>
+
+<div class="filterbar">
+  <div class="mtabs">
+    <div class="mtab active" data-tab="all" onclick="setTab('all')"><span class="dot dot-all"></span> Todos <span class="cnt" id="cnt-all">0</span></div>
+    <div class="mtab" data-tab="Meta" onclick="setTab('Meta')"><span class="dot dot-meta"></span> Meta Ads <span class="cnt" id="cnt-meta">0</span></div>
+    <div class="mtab" data-tab="Google" onclick="setTab('Google')"><span class="dot dot-google"></span> Google Ads <span class="cnt" id="cnt-google">0</span></div>
+    <div class="mtab" data-tab="TikTok" onclick="setTab('TikTok')"><span class="dot dot-tiktok"></span> TikTok Ads <span class="cnt" id="cnt-tiktok">0</span></div>
+  </div>
+  <div class="fb-sep"></div>
+  <div id="dyn-filters" style="display:contents"></div>
+  <button class="clr-btn" onclick="clearFilters()">&#x2715; Limpiar</button>
+  <div class="count-badge" id="count-badge">0 resultados</div>
+</div>
+
+<div class="content">
+  <div class="ads-grid" id="ads-grid">
+    <div class="empty">
+      <div class="empty-icon">&#9881;</div>
+      <p style="font-size:15px;font-weight:600;margin-bottom:8px">Configura el tablero para comenzar</p>
+      <p style="font-size:13px;max-width:380px;margin:0 auto;line-height:1.6;color:var(--muted)">Haz clic en <strong style="color:var(--orange)">Configuración</strong> para conectar Meta Ads, subir el HTML de Google Ads y cargar la homologación.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+// @@PRELOAD_START@@
+const PRELOADED/*SNAPSHOT*/={"v":0,"m":[],"g":[],"t":[],"h":[],"hk":[],"pw":""};
+// @@PRELOAD_END@@
+
+const S={metaAds:[],googleAds:[],tiktokAds:[],homoRows:[],homoKeys:[],tab:'all'};
+
+/* ---- INIT ---- */
+function init(){
+  if(PRELOADED.v){
+    S.metaAds=PRELOADED.m||[];
+    S.googleAds=PRELOADED.g||[];
+    S.tiktokAds=PRELOADED.t||[];
+    S.homoRows=PRELOADED.h||[];
+    S.homoKeys=PRELOADED.hk||[];
+    if(PRELOADED.pw) localStorage.setItem('pw',PRELOADED.pw);
+    updatePills();
+    if(S.metaAds.length){setMetaSt(S.metaAds.length);}
+    if(S.googleAds.length){setGoogleSt(S.googleAds.length);}
+    if(S.tiktokAds.length){setTikTokSt(S.tiktokAds.length);}
+    if(S.homoRows.length){setHomoSt(S.homoRows.length,true);}
+    rebuildFilters();
+  }
+  loadSettings();
+  updateLockStatus();
+  renderGrid();
+}
+
+/* ---- TOAST ---- */
+function toast(m,t){
+  const e=document.getElementById('toast');
+  e.textContent=m;e.className='toast show'+(t?' '+t:'');
+  clearTimeout(e._t);e._t=setTimeout(()=>e.className='toast',3500);
+}
+
+/* ---- PASSWORD ---- */
+async function hashPw(pw){
+  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(pw));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function tryOpenDrawer(){
+  const stored=localStorage.getItem('pw')||'';
+  if(!stored){openDrawer();return;}
+  document.getElementById('pw-input').value='';
+  document.getElementById('pw-err').textContent='';
+  document.getElementById('pw-skip').style.display='block';
+  document.getElementById('pw-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('pw-input').focus(),100);
+}
+function hidePwModal(){document.getElementById('pw-modal').classList.remove('open');}
+async function checkPw(){
+  const pw=document.getElementById('pw-input').value;
+  if(!pw){document.getElementById('pw-err').textContent='Ingresa la contraseña';return;}
+  const stored=localStorage.getItem('pw')||'';
+  const h=await hashPw(pw);
+  if(h===stored){hidePwModal();openDrawer();}
+  else{document.getElementById('pw-err').textContent='Contraseña incorrecta';}
+}
+async function setPw(){
+  const p1=document.getElementById('pw-new').value;
+  const p2=document.getElementById('pw-confirm').value;
+  if(p1.length<4){toast('Mínimo 4 caracteres','error');return;}
+  if(p1!==p2){toast('Las contraseñas no coinciden','error');return;}
+  const h=await hashPw(p1);
+  localStorage.setItem('pw',h);
+  document.getElementById('pw-new').value='';
+  document.getElementById('pw-confirm').value='';
+  updateLockStatus();
+  toast('Contraseña guardada','success');
+}
+function clearPw(){localStorage.removeItem('pw');updateLockStatus();toast('Contraseña eliminada');}
+function updateLockStatus(){
+  const s=document.getElementById('lock-status');
+  const has=!!localStorage.getItem('pw');
+  s.textContent=has?'🔒 Protegido':'Sin contraseña';
+  s.className='cfg-status '+(has?'st-ok':'st-empty');
+}
+
+/* ---- DRAWER ---- */
+function openDrawer(){document.getElementById('drawer').classList.add('open');document.getElementById('overlay').classList.add('open');}
+function closeDrawer(){document.getElementById('drawer').classList.remove('open');document.getElementById('overlay').classList.remove('open');}
+
+/* ---- SETTINGS ---- */
+function saveSettings(){
+  localStorage.setItem('mt',document.getElementById('meta-token').value.trim());
+  localStorage.setItem('ma',document.getElementById('meta-account').value.trim());
+  localStorage.setItem('mv',document.getElementById('meta-version').value.trim()||'v21.0');
+  localStorage.setItem('tt',document.getElementById('tiktok-token').value.trim());
+  localStorage.setItem('ta',document.getElementById('tiktok-account').value.trim());
+  localStorage.setItem('tp',document.getElementById('tiktok-proxy').value.trim());
+}
+function loadSettings(){
+  document.getElementById('meta-token').value=localStorage.getItem('mt')||'';
+  document.getElementById('meta-account').value=localStorage.getItem('ma')||'';
+  document.getElementById('meta-version').value=localStorage.getItem('mv')||'v21.0';
+  document.getElementById('tiktok-token').value=localStorage.getItem('tt')||'';
+  document.getElementById('tiktok-account').value=localStorage.getItem('ta')||'';
+  document.getElementById('tiktok-proxy').value=localStorage.getItem('tp')||'';
+  const cn=localStorage.getItem('client-name')||'';
+  document.getElementById('cfg-client-name').value=cn;
+  if(cn) setClientNameDisplay(cn);
+}
+function updateClientName(){
+  const cn=document.getElementById('cfg-client-name').value.trim();
+  localStorage.setItem('client-name',cn);
+  setClientNameDisplay(cn);
+}
+function setClientNameDisplay(cn){
+  document.getElementById('hd-sub').textContent=cn?cn+' · 2026':'ADCOM · 2026';
+}
+
+/* ---- STATUS HELPERS ---- */
+function setMetaSt(n){
+  const s=document.getElementById('meta-status');
+  s.textContent=n+' anuncios';s.className='cfg-status st-ok';
+}
+function setGoogleSt(n){
+  const s=document.getElementById('google-status');
+  s.textContent=n+' anuncios';s.className='cfg-status st-ok';
+}
+function setTikTokSt(n){
+  const s=document.getElementById('tiktok-status');
+  s.textContent=n+' anuncios';s.className='cfg-status st-ok';
+}
+
+/* ---- SAVE VERSION ---- */
+function saveVersion(){
+  if(!S.metaAds.length&&!S.googleAds.length&&!S.tiktokAds.length){toast('No hay datos para guardar','error');return;}
+  const data={v:1,m:S.metaAds,g:S.googleAds,t:S.tiktokAds,h:S.homoRows,hk:S.homoKeys,pw:localStorage.getItem('pw')||PRELOADED.pw||''};
+  let src='<!DOCTYPE html>\n'+document.documentElement.outerHTML;
+  src=src.replace(/\/\/ @@PRELOAD_START@@[\s\S]*?\/\/ @@PRELOAD_END@@/,
+    '// @@PRELOAD_START@@\nconst PRELOADED\/*SNAPSHOT*\/='+JSON.stringify(data)+';\n// @@PRELOAD_END@@');
+  const blob=new Blob([src],{type:'text/html;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='tablero-adcom.html';
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+  toast('Versión guardada — sube el archivo a GitHub para publicar','success');
+}
+
+/* ---- UTILS ---- */
+function norm(s){return(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();}
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function updatePills(){
+  document.getElementById('meta-pill').textContent='Meta: '+S.metaAds.length;
+  document.getElementById('google-pill').textContent='Google: '+S.googleAds.length;
+  document.getElementById('tiktok-pill').textContent='TikTok: '+S.tiktokAds.length;
+  const now=new Date();
+  document.getElementById('updated-time').textContent='Actualizado: '+now.toLocaleTimeString('es-CO',{hour:'2-digit',minute:'2-digit'});
+}
+
+/* ---- CSV PARSER ---- */
+function parseCSV(txt){
+  if(txt.charCodeAt(0)===0xFEFF) txt=txt.slice(1);
+  const ls=txt.split(/\r?\n/).filter(l=>l.trim());
+  if(!ls.length) return [];
+  const sep=ls[0].includes(';')?';':',';
+  const hs=ls[0].split(sep).map(h=>h.trim().replace(/^"|"$/g,''));
+  return ls.slice(1).map(l=>{
+    const cs=l.split(sep).map(c=>c.trim().replace(/^"|"$/g,''));
+    return Object.fromEntries(hs.map((h,i)=>[h,cs[i]||'']));
+  });
+}
+
+/* ---- HOMO FILE ---- */
+function handleHomoFile(inp){
+  const f=inp.files[0];if(!f) return;
+  document.getElementById('homo-filename').textContent='📎 '+f.name;
+  const isX=/\.xlsx?$/i.test(f.name);
+  if(isX){
+    loadXLSX(()=>{
+      const r=new FileReader();
+      r.onload=e=>{
+        try{
+          const wb=XLSX.read(e.target.result,{type:'array'});
+          S.homoRows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
+          setHomoSt(S.homoRows.length,false);
+        }catch(err){toast('Error Excel: '+err.message,'error');}
+      };
+      r.readAsArrayBuffer(f);
+    });
+  } else {
+    const r=new FileReader();
+    r.onload=e=>{S.homoRows=parseCSV(e.target.result);setHomoSt(S.homoRows.length,false);};
+    r.readAsText(f,'utf-8');
+  }
+}
+
+function setHomoSt(n, silent){
+  document.getElementById('homo-zone').classList.add('has-file');
+  const s=document.getElementById('homo-status');
+  s.textContent=n+' filas';s.className='cfg-status st-ok';
+
+  if(S.homoRows.length){
+    const allKeys=Object.keys(S.homoRows[0]);
+    const campCol=allKeys.find(k=>/campa|campaign/i.test(k))||allKeys[0];
+    S.homoKeys=allKeys.filter(k=>k!==campCol&&k.trim()!=='');
+    const info=document.getElementById('homo-cols-info');
+    info.style.display='block';
+    info.innerHTML='<strong>Columna clave:</strong> '+esc(campCol)+' &nbsp;|&nbsp; <strong>Filtros:</strong> '+S.homoKeys.map(k=>'<em>'+esc(k)+'</em>').join(', ');
+  }
+
+  if(S.metaAds.length) S.metaAds=S.metaAds.map(a=>applyH(a,false));
+  if(S.googleAds.length) S.googleAds=S.googleAds.map(a=>applyH(a,true));
+  if(S.tiktokAds.length) S.tiktokAds=S.tiktokAds.map(a=>applyH(a,false));
+  rebuildFilters();renderGrid();
+  if(!silent) toast('Homologación: '+n+' filas — columnas: '+S.homoKeys.join(', '),'success');
+}
+
+function loadXLSX(cb){
+  if(typeof XLSX!=='undefined'){cb();return;}
+  const s=document.createElement('script');
+  s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  s.onload=cb;
+  s.onerror=()=>toast('No se pudo cargar la librería Excel. Usa CSV.','error');
+  document.head.appendChild(s);
+}
+
+/* ---- HOMO LOOKUP ---- */
+function getCampKey(r){
+  const keys=Object.keys(r);
+  if(!keys.length) return '';
+  const campKey=keys.find(k=>/campa|campaign/i.test(k))||keys[0];
+  return r[campKey]||'';
+}
+
+function lookupMeta(name){
+  if(!S.homoRows.length) return null;
+  const k=norm(name);
+  return S.homoRows.find(r=>norm(getCampKey(r))===k)||
+         S.homoRows.find(r=>{const rk=norm(getCampKey(r));return rk&&(k.includes(rk)||rk.includes(k));})||null;
+}
+
+function lookupGoogle(name){
+  if(!S.homoRows.length) return null;
+  const nname=norm(name);
+  const exact=S.homoRows.find(r=>norm(getCampKey(r))===nname);
+  if(exact) return exact;
+  const partial=S.homoRows.find(r=>{
+    const rk=norm(getCampKey(r));
+    return rk.length>4&&(nname.includes(rk)||rk.includes(nname));
+  });
+  if(partial) return partial;
+  let best=null,bs=0;
+  for(const r of S.homoRows){
+    const rp=norm(getCampKey(r));
+    const pw=new Set(nname.split(/[\s_\-]+/).filter(w=>w.length>3));
+    const rw=new Set(rp.split(/[\s_\-]+/).filter(w=>w.length>3));
+    if(!pw.size||!rw.size) continue;
+    const sc=[...pw].filter(w=>rw.has(w)).length/Math.max(pw.size,rw.size);
+    if(sc>bs&&sc>=0.3){bs=sc;best=r;}
+  }
+  return best;
+}
+
+function applyH(ad,isG){
+  const h=isG?lookupGoogle(ad.campaign_name):lookupMeta(ad.campaign_name);
+  if(ad._homoFields) ad._homoFields.forEach(k=>delete ad[k]);
+  ad._homoFields=[];
+  ad.nivel='';ad.modalidad='';ad.facultad='';ad.programa='';ad.sede='';
+  if(h){
+    S.homoKeys.forEach(k=>{
+      const key='_h_'+k;
+      ad[key]=h[k]||'';
+      ad._homoFields.push(key);
+    });
+    const hkeys=Object.keys(h);
+    const find=(pat)=>{const k=hkeys.find(k=>pat.test(k));return k?h[k]||'':'';}
+    ad.nivel     = find(/^nivel$/i)||find(/nivel/i);
+    ad.modalidad = find(/^modalidad$/i)||find(/modalidad/i);
+    ad.facultad  = find(/facultad/i);
+    ad.programa  = find(/^programa general$/i)||find(/programa/i);
+    ad.sede      = find(/sede/i);
+  }
+  return ad;
+}
+
+/* ---- GOOGLE HTML PARSER ---- */
+function handleGoogleFile(inp){
+  const f=inp.files[0];if(!f) return;
+  document.getElementById('google-filename').textContent='📎 '+f.name;
+  const st=document.getElementById('google-status');
+  st.textContent='Procesando...';st.className='cfg-status st-load';
+  const r=new FileReader();
+  r.onload=e=>{
+    try{
+      S.googleAds=parseGoogle(e.target.result);
+      document.getElementById('google-zone').classList.add('has-file');
+      setGoogleSt(S.googleAds.length);
+      updatePills();
+      toast('Google Ads: '+S.googleAds.length+' anuncios cargados','success');
+      rebuildFilters();renderGrid();
+    }catch(err){
+      console.error('parseGoogle error:',err);
+      st.textContent='Error';st.className='cfg-status st-err';
+      toast('Error HTML: '+err.message,'error');
+    }
+  };
+  r.readAsText(f,'utf-8');
+}
+
+function parseGoogle(html){
+  const doc=new DOMParser().parseFromString(html,'text/html');
+  const all=[...doc.querySelectorAll('*')];
+  const pm=new Map(all.map((e,i)=>[e,i]));
+  const posOf=e=>pm.get(e)??-1;
+
+  const cH1=[];
+  doc.querySelectorAll('p.label').forEach(p=>{
+    if(!/^Campaign/i.test(p.textContent.trim())) return;
+    const h1=p.nextElementSibling;
+    if(!h1||h1.tagName!=='H1') return;
+    const ic=h1.querySelector('i.status');
+    if(!ic||!ic.className.includes('enabled')) return;
+    const name=h1.textContent.replace(/\s+/g,' ').trim()
+      .replace(/^(?:Search\s+)?(?:Enabled|Paused|Removed)\s*/i,'').trim();
+    if(name.length>1) cH1.push({name,pos:posOf(h1)});
+  });
+
+  const aH1=[];
+  doc.querySelectorAll('p.label').forEach(p=>{
+    if(!/^Ad Group$/i.test(p.textContent.trim())) return;
+    const h1=p.nextElementSibling;
+    if(!h1||h1.tagName!=='H1') return;
+    const ic=h1.querySelector('i.status');
+    if(!ic||!ic.className.includes('enabled')) return;
+    const name=h1.textContent.replace(/\s+/g,' ').trim()
+      .replace(/^(?:Enabled|Paused|Removed)\s*/i,'').trim();
+    if(name.length>1) aH1.push({name,pos:posOf(h1)});
+  });
+
+  const nearest=(lst,pos)=>{
+    let best=null;
+    for(const h of lst){if(h.pos<pos&&(!best||h.pos>best.pos))best=h;}
+    return best;
+  };
+
+  const ads=[];
+  const adContainers=[...doc.querySelectorAll('.textAd')];
+
+  for(const ta of adContainers){
+    const ap=posOf(ta);
+    const camp=nearest(cH1,ap);
+    if(!camp) continue;
+    const stM=ta.textContent.match(/Status:\s*(Enabled|Paused|Removed)/i);
+    if(stM&&stM[1].toLowerCase()!=='enabled') continue;
+    const hl=[],ds=[];
+    ta.querySelectorAll('div').forEach(d=>{
+      const t=d.textContent.trim();
+      let m=t.match(/^Headline (\d+):\s*(.+)$/);
+      if(m){hl[parseInt(m[1])-1]=m[2].trim();return;}
+      m=t.match(/^Description (\d+):\s*(.+)$/);
+      if(m){ds[parseInt(m[1])-1]=m[2].trim();}
+    });
+    const hlf=hl.filter(Boolean),dsf=ds.filter(Boolean);
+    if(!hlf.length&&!dsf.length) continue;
+    const ag=nearest(aH1,ap);
+    const d1=ta.querySelector('.dline1');
+    const lk=ta.querySelector('a[href]');
+    const kw=[],sk=new Set();
+    let par=ta.parentElement;
+    for(let depth=0;depth<12&&par;depth++,par=par.parentElement){
+      for(const tr of par.querySelectorAll('tr')){
+        const si=tr.querySelector('td.mdl-data-table__cell--status i.status');
+        const cs=[...tr.querySelectorAll('td.mdl-data-table__cell--non-numeric')];
+        if(!si||cs.length<2) continue;
+        const kt=cs[0]?cs[0].textContent.trim():'';
+        const mc=cs.find(c=>/^(Broad|Exact|Phrase|Amplia|Exacta|Frase)$/i.test(c.textContent.trim()));
+        if(!kt||kt.length<2||sk.has(kt)) continue;
+        sk.add(kt);
+        kw.push({text:kt,status:si.className.includes('enabled')?'enabled':'paused',match:mc?mc.textContent.trim():'Broad'});
+      }
+      if(kw.length) break;
+    }
+    ads.push(applyH({
+      medium:'Google',campaign_name:camp.name,ad_name:ag?ag.name:'',
+      headline:hlf[0]||'',body_text:d1?d1.textContent.trim():(dsf[0]||''),
+      description:dsf[1]||'',destination_url:lk?lk.getAttribute('href'):'',
+      preview_url:'',preview_shareable_link:'',
+      headlines:hlf,descriptions:dsf,keywords:kw,
+      nivel:'',modalidad:'',facultad:'',programa:'',sede:''
+    },true));
+  }
+  return ads;
+}
+
+/* ---- META API ---- */
+async function fetchPages(url){
+  const r=[];let nx=url;
+  while(nx){
+    const res=await fetch(nx);const d=await res.json();
+    if(d.error) throw new Error('Meta ['+d.error.code+']: '+d.error.message);
+    if(d.data) r.push(...d.data);
+    nx=d.paging?.next??null;
+  }
+  return r;
+}
+
+async function fetchMetaAds(){
+  const tk=document.getElementById('meta-token').value.trim();
+  const ac=document.getElementById('meta-account').value.trim();
+  const ver=document.getElementById('meta-version').value.trim()||'v21.0';
+  saveSettings();
+  if(!tk||!ac){toast('Ingresa token y cuenta','error');return;}
+  const BASE='https://graph.facebook.com/'+ver;
+  const btn=document.getElementById('meta-btn'),st=document.getElementById('meta-status');
+  btn.disabled=true;btn.textContent='⏳ Cargando...';
+  st.textContent='Cargando...';st.className='cfg-status st-load';
+  try{
+    const cp=new URLSearchParams({fields:'id,name',filtering:JSON.stringify([{field:'effective_status',operator:'IN',value:['ACTIVE']}]),limit:'500',access_token:tk});
+    const camps=await fetchPages(BASE+'/'+ac+'/campaigns?'+cp);
+    if(!camps.length) throw new Error('Sin campañas activas en esta cuenta');
+    const cm=new Map(camps.map(c=>[c.id,c.name]));
+    const apBase=new URLSearchParams({fields:'id,name,campaign_id,preview_shareable_link',filtering:JSON.stringify([{field:'effective_status',operator:'IN',value:['ACTIVE']}]),limit:'200',access_token:tk});
+    const raw=await fetchPages(BASE+'/'+ac+'/ads?'+apBase);
+
+    // Se agrega effective_object_story_id: es el post real publicado detrás del anuncio.
+    // El objeto "creative" puede estar reutilizado entre varios anuncios y traer texto
+    // desactualizado o de otro anuncio; el post real es la fuente de verdad.
+    const flds='id,title,body,thumbnail_url,effective_object_story_id,asset_feed_spec{bodies{text},titles{text},descriptions{text},link_urls{website_url},videos{thumbnail_url},images{url}},object_story_spec{link_data{link,caption,description,message},video_data{call_to_action{value{link}}}}';
+    const creativeMap=new Map();
+    for(let i=0;i<raw.length;i+=50){
+      const batch=raw.slice(i,i+50);
+      const ids=batch.map(a=>a.id).join(',');
+      const bRes=await fetch(BASE+'?ids='+ids+'&fields=creative{'+flds+'}&access_token='+tk);
+      const bData=await bRes.json();
+      if(bData.error) throw new Error('Meta ['+bData.error.code+']: '+bData.error.message);
+      Object.entries(bData).forEach(([id,d])=>creativeMap.set(id,d.creative||{}));
+    }
+
+    // Resolver el texto real desde el post publicado (effective_object_story_id) cuando exista.
+    // Si el token no tiene permiso pages_read_engagement esta llamada puede fallar silenciosamente
+    // y el anuncio cae de vuelta al fallback (asset_feed_spec / creative.body / link_data.message).
+    const storyIds=[...new Set([...creativeMap.values()].map(c=>c.effective_object_story_id).filter(Boolean))];
+    const storyMsgMap=new Map();
+    for(let i=0;i<storyIds.length;i+=50){
+      const batch=storyIds.slice(i,i+50);
+      try{
+        const sRes=await fetch(BASE+'?ids='+batch.join(',')+'&fields=message&access_token='+tk);
+        const sData=await sRes.json();
+        if(!sData.error){
+          Object.entries(sData).forEach(([id,d])=>storyMsgMap.set(id,d.message||''));
+        }
+      }catch(e){ /* silencioso: si falla, se usa el fallback por anuncio */ }
+    }
+
+    S.metaAds=raw.map(ad=>{
+      const c=creativeMap.get(ad.id)||{},fd=c.asset_feed_spec||{},ld=c.object_story_spec?.link_data||{},vd=c.object_story_spec?.video_data||{};
+      const realMsg=c.effective_object_story_id ? storyMsgMap.get(c.effective_object_story_id) : null;
+      const usedRealMsg=!!(realMsg && realMsg.trim());
+      return applyH({medium:'Meta',campaign_name:cm.get(ad.campaign_id)||ad.campaign_id,ad_name:ad.name||'',
+        headline:fd.titles?.[0]?.text||c.title||ld.caption||'',
+        body_text:(usedRealMsg?realMsg:'')||fd.bodies?.[0]?.text||c.body||ld.message||'',
+        description:fd.descriptions?.[0]?.text||ld.description||'',
+        destination_url:fd.link_urls?.[0]?.website_url||ld.link||vd.call_to_action?.value?.link||'',
+        preview_url:fd.videos?.[0]?.thumbnail_url||fd.images?.[0]?.url||c.thumbnail_url||'',
+        preview_shareable_link:ad.preview_shareable_link||'',
+        text_source:usedRealMsg?'verified':'fallback',
+        nivel:'',modalidad:'',facultad:'',programa:'',sede:''
+      },false);
+    });
+    setMetaSt(S.metaAds.length);
+    updatePills();
+    toast('Meta: '+S.metaAds.length+' anuncios cargados','success');
+    rebuildFilters();renderGrid();
+  }catch(e){
+    document.getElementById('meta-status').textContent='Error';
+    document.getElementById('meta-status').className='cfg-status st-err';
+    toast(e.message,'error');
+  }
+  finally{btn.disabled=false;btn.textContent='▶ Conectar y cargar anuncios';}
+}
+
+/* ---- TIKTOK API ---- */
+function tiktokFetch(url,tk,proxyUrl){
+  if(proxyUrl){
+    return fetch(proxyUrl+'?token='+encodeURIComponent(tk)+'&url='+encodeURIComponent(url));
+  }
+  return fetch(url,{headers:{'Access-Token':tk}});
+}
+
+async function fetchTikTokPages(url,tk,proxyUrl){
+  const r=[];let page=1;
+  while(true){
+    const pagedUrl=url+'&page='+page+'&page_size=100';
+    const res=await tiktokFetch(pagedUrl,tk,proxyUrl);
+    const d=await res.json();
+    if(d.code!==0){
+      let msg=d.message||'error desconocido';
+      if(msg.length>200) msg=msg.slice(0,200)+'…';
+      throw new Error('TikTok ['+d.code+']: '+msg);
+    }
+    const list=d.data?.list||[];
+    r.push(...list);
+    const pi=d.data?.page_info;
+    if(!pi||!list.length||page>=pi.total_page) break;
+    page++;
+  }
+  return r;
+}
+
+async function fetchTikTokAds(){
+  const tk=document.getElementById('tiktok-token').value.trim();
+  const ac=document.getElementById('tiktok-account').value.trim();
+  const proxyUrl=document.getElementById('tiktok-proxy').value.trim();
+  saveSettings();
+  if(!tk||!ac){toast('Ingresa Advertiser ID y Access Token','error');return;}
+  const BASE='https://business-api.tiktok.com/open_api/v1.3';
+  const btn=document.getElementById('tiktok-btn'),st=document.getElementById('tiktok-status');
+  btn.disabled=true;btn.textContent='⏳ Cargando...';
+  st.textContent='Cargando...';st.className='cfg-status st-load';
+  try{
+    const filtering=encodeURIComponent(JSON.stringify({primary_status:'STATUS_DELIVERY_OK'}));
+    const url=BASE+'/ad/get/?advertiser_id='+encodeURIComponent(ac)+'&filtering='+filtering;
+    const raw=await fetchTikTokPages(url,tk,proxyUrl);
+    if(!raw.length) throw new Error('Sin anuncios activos en esta cuenta');
+
+    const imgIds=[...new Set(raw.flatMap(a=>a.image_ids||[]).filter(Boolean))];
+    const vidIds=[...new Set(raw.map(a=>a.video_id).filter(Boolean))];
+    const imgMap=new Map(),vidMap=new Map();
+    for(let i=0;i<imgIds.length;i+=20){
+      const batch=imgIds.slice(i,i+20);
+      const iu=BASE+'/file/image/ad/info/?advertiser_id='+encodeURIComponent(ac)+'&image_ids='+encodeURIComponent(JSON.stringify(batch));
+      const r=await tiktokFetch(iu,tk,proxyUrl);
+      const d=await r.json();
+      if(d.code===0)(d.data?.list||[]).forEach(im=>imgMap.set(im.image_id,im.image_url));
+    }
+    for(let i=0;i<vidIds.length;i+=20){
+      const batch=vidIds.slice(i,i+20);
+      const vu=BASE+'/file/video/ad/info/?advertiser_id='+encodeURIComponent(ac)+'&video_ids='+encodeURIComponent(JSON.stringify(batch));
+      const r=await tiktokFetch(vu,tk,proxyUrl);
+      const d=await r.json();
+      if(d.code===0)(d.data?.list||[]).forEach(v=>vidMap.set(v.video_id,v.video_cover_url||v.poster_url||''));
+    }
+
+    S.tiktokAds=raw.map(ad=>applyH({
+      medium:'TikTok',
+      campaign_name:ad.campaign_name||ad.campaign_id||'',
+      ad_name:ad.ad_name||'',
+      headline:ad.identity_name||ad.display_name||'',
+      body_text:ad.ad_text||'',
+      description:'',
+      destination_url:ad.landing_page_url||'',
+      preview_url:(ad.image_ids&&ad.image_ids[0]&&imgMap.get(ad.image_ids[0]))||vidMap.get(ad.video_id)||'',
+      preview_shareable_link:'',
+      nivel:'',modalidad:'',facultad:'',programa:'',sede:''
+    },false));
+    setTikTokSt(S.tiktokAds.length);
+    updatePills();
+    toast('TikTok: '+S.tiktokAds.length+' anuncios cargados','success');
+    rebuildFilters();renderGrid();
+  }catch(e){
+    document.getElementById('tiktok-status').textContent='Error';
+    document.getElementById('tiktok-status').className='cfg-status st-err';
+    const isCors=e instanceof TypeError;
+    toast(isCors&&!proxyUrl?'TikTok bloqueó la llamada directa (CORS) — configura el Proxy URL':e.message,'error');
+    console.error(e);
+  }
+  finally{btn.disabled=false;btn.textContent='▶ Conectar y cargar anuncios';}
+}
+
+/* ---- TABS & FILTERS ---- */
+function setTab(t){
+  S.tab=t;
+  document.querySelectorAll('.mtab').forEach(m=>m.classList.toggle('active',m.dataset.tab===t));
+  renderGrid();
+}
+function clearFilters(){
+  document.getElementById('search').value='';
+  document.querySelectorAll('#dyn-filters select').forEach(s=>s.value='');
+  renderGrid();
+}
+
+function rebuildFilters(){
+  const all=[...S.metaAds,...S.googleAds,...S.tiktokAds];
+  const bar=document.getElementById('dyn-filters');
+  bar.innerHTML='';
+  if(!S.homoKeys.length) return;
+  S.homoKeys.forEach(k=>{
+    const key='_h_'+k;
+    const vals=[...new Set(all.map(a=>a[key]).filter(Boolean))].sort();
+    if(!vals.length) return;
+    const sel=document.createElement('select');
+    sel.className='fsel';
+    sel.id='df_'+key;
+    sel.setAttribute('data-key',key);
+    sel.innerHTML='<option value="">'+esc(k)+'</option>';
+    vals.forEach(v=>{const o=document.createElement('option');o.value=o.textContent=v;sel.appendChild(o);});
+    sel.onchange=renderGrid;
+    bar.appendChild(sel);
+  });
+}
+
+function getFiltered(){
+  const q=norm(document.getElementById('search').value),tb=S.tab;
+  const dynFilters=[...document.querySelectorAll('#dyn-filters select')]
+    .map(s=>({key:s.getAttribute('data-key'),val:s.value}))
+    .filter(f=>f.val);
+  return [...S.metaAds,...S.googleAds,...S.tiktokAds].filter(a=>{
+    if(tb!=='all'&&a.medium!==tb) return false;
+    for(const {key,val} of dynFilters){if(a[key]!==val) return false;}
+    if(q){
+      const kws=(a.keywords||[]).map(k=>k.text).join(' ');
+      const dynVals=(a._homoFields||[]).map(k=>a[k]||'').join(' ');
+      if(!norm([a.campaign_name,a.ad_name,a.headline,a.body_text,dynVals,...(a.headlines||[]),kws].join(' ')).includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function tagCls(col,val){
+  const c=(col||'').toLowerCase(),v=(val||'').toLowerCase();
+  if(/nivel|level|type|tipo/i.test(c)){
+    if(/pre/i.test(v)) return 'tag-pre';
+    if(/pos|post|mast|doct|espec|magis/i.test(v)) return 'tag-pos';
+    if(/tec|lab|aux|diplom/i.test(v)) return 'tag-tec';
+  }
+  if(/modal/i.test(c)){
+    if(/pres/i.test(v)) return 'tag-pres';
+    if(/virt|online|remot/i.test(v)) return 'tag-virt';
+  }
+  return 'tag-neutral';
+}
+
+function dynTagsHtml(ad){
+  if(!S.homoKeys.length){
+    let h='<div class="tags-row">';
+    if(ad.nivel) h+='<span class="tag '+tagCls('nivel',ad.nivel)+'">'+esc(ad.nivel)+'</span>';
+    if(ad.modalidad) h+='<span class="tag '+tagCls('modalidad',ad.modalidad)+'">'+esc(ad.modalidad)+'</span>';
+    h+='</div>';
+    if(ad.facultad) h+='<div class="field-row" style="margin-top:6px"><div class="field-lbl">Facultad</div><div class="field-val">'+esc(ad.facultad)+'</div></div>';
+    return h;
+  }
+  let tagsHtml='<div class="tags-row" style="flex-wrap:wrap;gap:4px;margin-top:6px">';
+  let fieldsHtml='';
+  S.homoKeys.forEach(k=>{
+    const v=ad['_h_'+k];
+    if(!v) return;
+    if(v.length>35||/programa|facultad|product|categor|descripci|detalle/i.test(k)){
+      fieldsHtml+='<div class="field-row" style="margin-top:4px"><div class="field-lbl">'+esc(k)+'</div><div class="field-val">'+esc(v)+'</div></div>';
+    } else {
+      tagsHtml+='<span class="tag '+tagCls(k,v)+'" title="'+esc(k)+'">'+esc(v)+'</span>';
+    }
+  });
+  tagsHtml+='</div>';
+  return tagsHtml+fieldsHtml;
+}
+
+/* ---- META CARD ---- */
+function rMeta(ad){
+  const pv=ad.preview_url
+    ?'<div class="preview-box"><img src="'+esc(ad.preview_url)+'" loading="lazy" alt="Preview" onerror="this.style.display=\'none\'">'+(ad.preview_shareable_link?'<a class="prev-badge" href="'+esc(ad.preview_shareable_link)+'" target="_blank">Ver en Facebook ↗</a>':'')+'</div>'
+    :'<div class="preview-box"><div class="preview-placeholder"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg><span>Sin imagen</span></div></div>';
+  const srcBadge = ad.text_source==='verified'
+    ? '<span class="src-badge src-verified">✔ Texto verificado desde post</span>'
+    : (ad.text_source==='fallback' ? '<span class="src-badge src-fallback">⚠ Texto de respaldo (creative)</span>' : '');
+  return '<div class="ad-card">'
+    +'<div class="card-header"><span class="card-medium badge-meta"><svg class="medium-icon" viewBox="0 0 24 24" fill="var(--meta)"><path d="M12 2.04C6.5 2.04 2 6.53 2 12.06C2 17.06 5.66 21.21 10.44 21.96V14.96H7.9V12.06H10.44V9.85C10.44 7.34 11.93 5.96 14.22 5.96C15.31 5.96 16.45 6.15 16.45 6.15V8.62H15.19C13.95 8.62 13.56 10.18 13.56 10.18V12.06H16.34L15.89 14.96H13.56V21.96A10 10 0 0 0 22 12.06C22 6.53 17.5 2.04 12 2.04Z"/></svg> Meta Ads</span>'
+    +'<span class="card-program" title="'+esc(ad.programa||ad.campaign_name)+'">'+esc(ad.programa||'Campaña general')+'</span></div>'
+    +pv
+    +'<div class="card-body">'
+    +(ad.ad_name?'<div class="field-row"><div class="field-lbl">Nombre del anuncio</div><div class="field-val">'+esc(ad.ad_name)+'</div></div>':'')
+    +(ad.headline?'<div class="field-row"><div class="field-lbl">Titular</div><div class="field-val bold">'+esc(ad.headline)+'</div></div>':'')
+    +(ad.body_text?'<div class="field-row"><div class="field-lbl">Cuerpo</div><div class="field-val">'+esc(ad.body_text)+'</div></div>':'')
+    +(ad.description?'<div class="field-row"><div class="field-lbl">Descripción</div><div class="field-val">'+esc(ad.description)+'</div></div>':'')
+    +srcBadge
+    +dynTagsHtml(ad)
+    +(ad.destination_url?'<div class="field-row"><div class="field-lbl">URL de destino</div><div class="field-val"><a href="'+esc(ad.destination_url)+'" target="_blank">'+esc(ad.destination_url)+'</a></div></div>':'')
+    +(ad.preview_shareable_link?'<div class="field-row"><div class="field-lbl">Preview</div><div class="field-val"><a href="'+esc(ad.preview_shareable_link)+'" target="_blank">Ver en Meta ↗</a></div></div>':'')
+    +'</div>'
+    +'<div class="card-footer"><span class="camp-chip" title="'+esc(ad.campaign_name)+'">📅 '+esc(ad.campaign_name)+'</span></div>'
+    +'</div>';
+}
+
+/* ---- GOOGLE CARD ---- */
+function rGoogle(ad){
+  const dom=ad.destination_url?ad.destination_url.replace(/https?:\/\/([^/]+).*/,'$1'):'';
+  const top3=(ad.headlines||[]).slice(0,3).join(' | ')||'—';
+  const n=(ad.headlines||[]).length;
+  const allHl=(ad.headlines||[]).map((h,i)=>'<div class="hl-item"><span class="hl-num">H'+(i+1)+'</span>'+esc(h)+'</div>').join('');
+  const allDs=(ad.descriptions||[]).map((d,i)=>'<div class="desc-item"><span class="hl-num">D'+(i+1)+'</span>'+esc(d)+'</div>').join('');
+  const enK=(ad.keywords||[]).filter(k=>k.status==='enabled').length;
+  const paK=(ad.keywords||[]).filter(k=>k.status!=='enabled').length;
+  const kwR=(ad.keywords||[]).map(k=>'<div class="kw-row"><span class="kw-dot '+k.status+'"></span><span class="kw-text">'+esc(k.text)+'</span><span class="kw-match">'+esc(k.match)+'</span></div>').join('');
+  return '<div class="ad-card">'
+    +'<div class="card-header"><span class="card-medium badge-google"><svg class="medium-icon" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.47 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg> Google Ads</span>'
+    +'<span class="card-program" title="'+esc(ad.programa||ad.campaign_name)+'">'+esc(ad.programa||'Campaña general')+'</span></div>'
+    +'<div class="rsa-preview">'
+    +(dom?'<div class="rsa-dom-row"><span class="rsa-ad">Ad</span><span class="rsa-dom">'+esc(dom)+'</span></div>':'')
+    +'<div class="rsa-title">'+esc(top3)+'</div>'
+    +'<div class="rsa-body">'+esc(ad.body_text||'—')+'</div>'
+    +'<button class="hl-toggle" onclick="var p=this.nextElementSibling;p.classList.toggle(\'open\');this.textContent=p.classList.contains(\'open\')?\'\u25b2 Ocultar titulares\':\'\u25bc Ver todos los titulares ('+n+')\';">▼ Ver todos los titulares ('+n+')</button>'
+    +'<div class="hl-expanded">'+(allHl?'<div class="hl-sec-label">Titulares</div><div class="hl-list">'+allHl+'</div>':'')+(allDs?'<div class="hl-sec-label" style="margin-top:8px">Descripciones</div><div class="hl-list">'+allDs+'</div>':'')+'</div>'
+    +'</div>'
+    +(kwR?'<div class="kw-section"><div class="kw-head"><span class="kw-label">Palabras clave</span><span class="kw-counts"><span class="kw-cnt"><span class="kw-dot enabled"></span>'+enK+' activas</span>'+(paK?'<span class="kw-cnt"><span class="kw-dot paused"></span>'+paK+' en pausa</span>':'')+'</span></div><div class="kw-list">'+kwR+'</div></div>':'')
+    +'<div class="card-body">'
+    +(ad.ad_name?'<div class="field-row"><div class="field-lbl">Grupo de anuncios</div><div class="field-val">'+esc(ad.ad_name)+'</div></div>':'')
+    +dynTagsHtml(ad)
+    +(ad.destination_url?'<div class="field-row"><div class="field-lbl">URL de destino</div><div class="field-val"><a href="'+esc(ad.destination_url)+'" target="_blank">'+esc(ad.destination_url)+'</a></div></div>':'')
+    +'</div>'
+    +'<div class="card-footer"><span class="camp-chip" title="'+esc(ad.campaign_name)+'">📅 '+esc(ad.campaign_name)+'</span></div>'
+    +'</div>';
+}
+
+/* ---- TIKTOK CARD ---- */
+function rTikTok(ad){
+  const pv=ad.preview_url
+    ?'<div class="preview-box"><img src="'+esc(ad.preview_url)+'" loading="lazy" alt="Preview" onerror="this.style.display=\'none\'"></div>'
+    :'<div class="preview-box"><div class="preview-placeholder"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg><span>Sin imagen</span></div></div>';
+  return '<div class="ad-card">'
+    +'<div class="card-header"><span class="card-medium badge-tiktok"><svg class="medium-icon" viewBox="0 0 24 24" fill="#000"><path d="M16.6 5.82s.51.5 0 0A4.278 4.278 0 0 1 15.54 3h-3.09v12.4a2.592 2.592 0 0 1-2.59 2.5c-1.42 0-2.6-1.16-2.6-2.6c0-1.72 1.66-3.01 3.37-2.48V9.66c-3.45-.46-6.47 2.22-6.47 5.64c0 3.33 2.76 5.7 5.69 5.7c3.14 0 5.69-2.55 5.69-5.7V9.01a7.35 7.35 0 0 0 4.3 1.38V7.3s-1.88.09-3.24-1.48z"/></svg> TikTok Ads</span>'
+    +'<span class="card-program" title="'+esc(ad.programa||ad.campaign_name)+'">'+esc(ad.programa||'Campaña general')+'</span></div>'
+    +pv
+    +'<div class="card-body">'
+    +(ad.ad_name?'<div class="field-row"><div class="field-lbl">Nombre del anuncio</div><div class="field-val">'+esc(ad.ad_name)+'</div></div>':'')
+    +(ad.headline?'<div class="field-row"><div class="field-lbl">Titular</div><div class="field-val bold">'+esc(ad.headline)+'</div></div>':'')
+    +(ad.body_text?'<div class="field-row"><div class="field-lbl">Texto del anuncio</div><div class="field-val">'+esc(ad.body_text)+'</div></div>':'')
+    +dynTagsHtml(ad)
+    +(ad.destination_url?'<div class="field-row"><div class="field-lbl">URL de destino</div><div class="field-val"><a href="'+esc(ad.destination_url)+'" target="_blank">'+esc(ad.destination_url)+'</a></div></div>':'')
+    +'</div>'
+    +'<div class="card-footer"><span class="camp-chip" title="'+esc(ad.campaign_name)+'">📅 '+esc(ad.campaign_name)+'</span></div>'
+    +'</div>';
+}
+
+/* ---- RENDER GRID ---- */
+function renderGrid(){
+  const f=getFiltered(),tot=S.metaAds.length+S.googleAds.length+S.tiktokAds.length;
+  document.getElementById('meta-pill').textContent='Meta: '+S.metaAds.length;
+  document.getElementById('google-pill').textContent='Google: '+S.googleAds.length;
+  document.getElementById('tiktok-pill').textContent='TikTok: '+S.tiktokAds.length;
+  document.getElementById('count-badge').textContent=f.length+' resultados';
+  document.getElementById('cnt-all').textContent=tot;
+  document.getElementById('cnt-meta').textContent=S.metaAds.length;
+  document.getElementById('cnt-google').textContent=S.googleAds.length;
+  document.getElementById('cnt-tiktok').textContent=S.tiktokAds.length;
+  const g=document.getElementById('ads-grid');
+  if(!f.length){
+    g.innerHTML='<div class="empty"><div class="empty-icon">'+(tot===0?'⚙️':'🔍')+'</div>'
+      +'<p style="font-size:15px;font-weight:600;margin-bottom:8px">'+(tot===0?'Configura el tablero para comenzar':'Sin resultados para estos filtros')+'</p>'
+      +(tot===0?'<p style="font-size:13px;max-width:380px;margin:0 auto;line-height:1.6;color:var(--muted)">Haz clic en <strong style="color:var(--orange)">Configuración</strong> para conectar Meta Ads, TikTok Ads, subir el HTML de Google Ads y cargar la homologación.</p>':'')
+      +'</div>';
+    return;
+  }
+  g.innerHTML=f.map(a=>a.medium==='Meta'?rMeta(a):a.medium==='Google'?rGoogle(a):rTikTok(a)).join('');
+}
+
+/* ---- ACTUALIZAR TODO ---- */
+function actualizarTodo(){
+  S.metaAds=S.metaAds.map(a=>applyH(a,false));
+  S.googleAds=S.googleAds.map(a=>applyH(a,true));
+  S.tiktokAds=S.tiktokAds.map(a=>applyH(a,false));
+  rebuildFilters();renderGrid();closeDrawer();
+  toast('Tablero actualizado','success');
+}
+
+init();
+</script>
+</body>
+</html>
